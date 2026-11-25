@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WSN Camera Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body{font-family:Arial;background:#f2f4f8;margin:0;padding:18px}
+    .box{max-width:520px;margin:auto;background:white;padding:18px;border-radius:12px}
+    h2{color:#2874f0}
+    button{width:100%;padding:13px;background:#2874f0;color:white;border:0;border-radius:8px;margin-top:12px}
+    #reader{width:100%;margin-top:15px}
+    #result{font-weight:bold;overflow-wrap:anywhere;margin-top:15px}
+  </style>
+</head>
+<body>
+<div class="box">
+  <h2>WSN Barcode Scanner</h2>
+  <p>Camera permission allow karein aur barcode ko frame ke andar rakhein.</p>
+  <div id="reader"></div>
+  <div id="result"></div>
+  <button onclick="startScan()">Start Camera</button>
+  <button onclick="stopScan()">Stop Camera</button>
+</div>
+
+<script>
+let scanner=null;
+let done=false;
+
+function getReturnUrl(){
+  return new URLSearchParams(location.search).get('returnUrl');
+}
+
+async function startScan(){
+  done=false;
+  const result=document.getElementById('result');
+  result.textContent='Opening camera...';
+
+  try{
+    if(!scanner) scanner=new Html5Qrcode('reader');
+
+    const cameras=await Html5Qrcode.getCameras();
+    if(!cameras.length) throw new Error('No camera found');
+
+    const back=cameras.find(c=>/back|rear|environment/i.test(c.label));
+    const cameraId=back ? back.id : cameras[cameras.length-1].id;
+
+    await scanner.start(
+      cameraId,
+      {fps:10,qrbox:{width:280,height:140}},
+      async decodedText=>{
+        if(done)return;
+        done=true;
+        result.textContent='WSN scanned: '+decodedText;
+
+        try{await scanner.stop();}catch(e){}
+
+        const returnUrl=getReturnUrl();
+        if(!returnUrl){
+          result.textContent='Return URL missing. Scanned WSN: '+decodedText;
+          return;
+        }
+
+        const target=new URL(returnUrl);
+        target.searchParams.set('wsn',decodedText.trim());
+        location.href=target.toString();
+      },
+      ()=>{}
+    );
+  }catch(e){
+    result.textContent='Camera error: '+e.message+
+      '. Browser settings me camera permission check karein.';
+  }
+}
+
+async function stopScan(){
+  if(scanner && scanner.isScanning){
+    await scanner.stop();
+    document.getElementById('result').textContent='Camera stopped';
+  }
+}
+</script>
+</body>
+</html>
